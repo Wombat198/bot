@@ -74,6 +74,25 @@ python -m polymarket_btc_arb --live
 
 Without a private key, `--live` is forced back to dry-run.
 
+
+## $50 live checklist
+
+Tuned config: `config/live-50.yaml` (~$5 max size, $10 daily loss kill, 10 arbs/day, 30s cooldown). **`dry_run: true` stays in the file**; only CLI `--live` can flip it (and only after gates pass).
+
+1. Fund a Polymarket wallet with a small USDC balance (start ~$50).
+2. `cp .env.example .env` and set `POLYMARKET_PRIVATE_KEY` (never commit `.env`).
+3. `pip install -e ".[live]"` (needs `py-clob-client`).
+4. Dry-run first with the live-50 sizing (paper fills against live books):
+   ```bash
+   python scripts/long_run.py --config config/live-50.yaml
+   ```
+5. Only then, if you accept the risks:
+   ```bash
+   python scripts/long_run.py --config config/live-50.yaml --live --i-understand-risk
+   ```
+
+**Warnings:** live merge is **not fully turnkey** (wallet/CTF approvals / SDK wiring). Polymarket has **geo restrictions**. Never commit `.env`. Start tiny. Kill switch trips on `max_daily_loss`. Operator should `tee` stdout to a log file.
+
 ## Tests
 
 ```bash

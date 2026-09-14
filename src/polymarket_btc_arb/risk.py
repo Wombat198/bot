@@ -16,6 +16,7 @@ class RiskConfig:
     max_daily_loss: float = 50.0
     kill_switch: bool = True
     dry_run: bool = True
+    max_arbs_per_day: Optional[int] = None  # None = unlimited
 
 
 @dataclass
@@ -25,14 +26,16 @@ class RiskManager:
     _day: date = field(default_factory=date.today)
     _killed: bool = False
     _kill_reason: Optional[str] = None
+    _arbs_today: int = 0
 
     def _roll_day(self) -> None:
         today = date.today()
         if today != self._day:
             self._day = today
             self._realized_pnl = 0.0
+            self._arbs_today = 0
             # Kill switch stays engaged until explicitly reset.
-            logger.info("risk: new trading day %s — daily PnL reset", today)
+            logger.info("risk: new trading day %s — daily PnL/arbs reset", today)
 
     @property
     def dry_run(self) -> bool:
@@ -51,6 +54,11 @@ class RiskManager:
         self._roll_day()
         return self._realized_pnl
 
+    @property
+    def arbs_today(self) -> int:
+        self._roll_day()
+        return self._arbs_today
+
     def record_pnl(self, amount: float) -> None:
         """Accumulate realized PnL; trip kill switch on max daily loss."""
         self._roll_day()
@@ -62,6 +70,11 @@ class RiskManager:
             self.engage_kill_switch(
                 f"daily loss {self._realized_pnl:.4f} <= -{self.config.max_daily_loss}"
             )
+
+    def record_arb(self) -> None:
+        """Count a completed arb toward max_arbs_per_day."""
+        self._roll_day()
+        self._arbs_today += 1
 
     def engage_kill_switch(self, reason: str) -> None:
         self._killed = True
@@ -87,6 +100,15 @@ class RiskManager:
             return (
                 False,
                 f"size {size} exceeds max_position_size {self.config.max_position_size}",
+            )
+        if (
+            self.config.max_arbs_per_day is not None
+            and self._arbs_today >= int(self.config.max_arbs_per_day)
+        ):
+            return (
+                False,
+                f"max_arbs_per_day {self.config.max_arbs_per_day} reached "
+                f"(arbs_today={self._arbs_today})",
             )
         if (
             self.config.kill_switch

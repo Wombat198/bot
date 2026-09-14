@@ -1,0 +1,30 @@
+strategy:
+  market: BTC_UP_DOWN
+  timeframe: 15m
+  min_edge: 0.025   # slightly above 2¢ to survive fees
+
+risk:
+  max_position_size: 5      # ~$5 per pair at ~$1 notional
+  max_daily_loss: 10        # kill switch trip
+  kill_switch: true
+  max_arbs_per_day: 10      # new field — honor in long_run if present
+  cooldown_sec_after_arb: 30
+
+execution:
+  dry_run: true             # MUST stay true in file; --live overrides
+  require_both_legs: true
+  prefer_maker: true
+
+agents:
+  watcher: true
+  executor: true
+  merger: true
+
+poll:
+  interval_sec: 1.5
+  smoke_max_cycles: 0
+
+apis:
+  gamma_host: https://gamma-api.polymarket.com
+  clob_host: https://clob.polymarket.com
+  ws_market: wss://ws-subscriptions-clob.polymarket.com/ws/market

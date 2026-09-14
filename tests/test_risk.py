@@ -43,3 +43,16 @@ def test_clamp_size():
 
 def test_dry_run_default_true():
     assert RiskManager().dry_run is True
+
+
+def test_max_arbs_per_day_blocks():
+    rm = RiskManager(
+        RiskConfig(max_arbs_per_day=2, max_position_size=10, dry_run=True)
+    )
+    assert rm.allow_trade(5)[0]
+    rm.record_arb()
+    rm.record_arb()
+    ok, reason = rm.allow_trade(5)
+    assert not ok
+    assert "max_arbs_per_day" in reason
+    assert rm.arbs_today == 2
