@@ -10,9 +10,10 @@ from typing import Optional
 from .arbitrage import Opportunity
 from .config import load_config
 from .executor import DryRunBackend, Executor, LiveClobBackend
+from .fees import FeeConfig
 from .markets.clob import ClobRestClient
 from .markets.gamma import discover_btc_up_down
-from .merge import DryRunMerger, LiveMergeStub, merge_positions
+from .merge import DryRunMerger, LiveMerger, merge_positions
 from .risk import RiskConfig, RiskManager
 from .watcher import Watcher
 
@@ -111,7 +112,6 @@ def run(argv: Optional[list[str]] = None) -> int:
         cfg["poll"]["smoke_max_cycles"] = args.smoke
     if args.live:
         cfg["execution"]["dry_run"] = False
-        # re-apply key gate
         if not (cfg.get("_env") or {}).get("private_key"):
             logger.warning("POLYMARKET_PRIVATE_KEY missing — forcing dry_run")
             cfg["execution"]["dry_run"] = True
@@ -119,13 +119,17 @@ def run(argv: Optional[list[str]] = None) -> int:
     dry_run = bool(cfg["execution"]["dry_run"])
     timeframe = cfg["strategy"]["timeframe"]
     min_edge = float(cfg["strategy"]["min_edge"])
+    min_net_raw = cfg["strategy"].get("min_net_edge")
+    min_net_edge = float(min_net_raw) if min_net_raw is not None else None
     size = float(cfg["risk"]["max_position_size"])
+    fee_cfg = FeeConfig.from_mapping(cfg.get("fees"))
 
     logger.info(
-        "starting dry_run=%s timeframe=%s min_edge=%s max_size=%s",
+        "starting dry_run=%s timeframe=%s min_edge=%s min_net_edge=%s max_size=%s",
         dry_run,
         timeframe,
         min_edge,
+        min_net_edge,
         size,
     )
     if cfg.get("_forced_dry_run"):
@@ -161,6 +165,8 @@ def run(argv: Optional[list[str]] = None) -> int:
     )
 
     clob = ClobRestClient(host=cfg["apis"]["clob_host"])
+    fill_timeout = float(cfg["execution"].get("fill_timeout_sec") or 3.0)
+    fill_poll = float(cfg["execution"].get("fill_poll_interval_sec") or 0.25)
     live_client = None if dry_run else _build_live_client(cfg)
     if dry_run or live_client is None:
         backend = DryRunBackend(fill=True)
@@ -169,8 +175,21 @@ def run(argv: Optional[list[str]] = None) -> int:
             risk.config.dry_run = True
             dry_run = True
     else:
-        backend = LiveClobBackend(live_client)
-        merger = LiveMergeStub(live_client)
+        backend = LiveClobBackend(
+            live_client,
+            fill_timeout_sec=fill_timeout,
+            poll_interval_sec=fill_poll,
+        )
+        env = cfg.get("_env") or {}
+        merge_cfg = cfg.get("merge") or {}
+        merger = LiveMerger(
+            live_client,
+            private_key=env.get("private_key"),
+            rpc_url=env.get("rpc_url"),
+            collateral=merge_cfg.get("collateral"),
+            use_adapter=bool(merge_cfg.get("use_adapter")),
+            chain_id=int(env.get("chain_id") or 137),
+        )
 
     executor = Executor(
         risk=risk,
@@ -189,7 +208,6 @@ def run(argv: Optional[list[str]] = None) -> int:
             logger.error("skip — kill switch: %s", risk.kill_reason)
             return
         if executed_once and dry_run and cfg["poll"]["smoke_max_cycles"]:
-            # smoke: still log gaps, only execute once
             return
         report = executor.execute_pair(
             opp,
@@ -213,14 +231,17 @@ def run(argv: Optional[list[str]] = None) -> int:
                 mr.dry_run,
                 mr.detail,
             )
-            # Paper PnL: edge * size (ignores fees)
             if dry_run and mr.success:
-                risk.record_pnl(opp.edge * report.size)
+                risk.record_pnl(opp.net_edge * report.size)
 
     watcher = Watcher(
         market=market,
         clob=clob,
         min_edge=min_edge,
+        min_net_edge=min_net_edge,
+        fee_cfg=fee_cfg,
+        shares=size,
+        as_taker=bool(fee_cfg.assume_taker),
         on_opportunity=on_opp if cfg["agents"].get("watcher", True) else None,
     )
 

@@ -2,18 +2,29 @@ strategy:
   market: BTC_UP_DOWN
   timeframe: 15m
   min_edge: 0.025   # slightly above 2¢ to survive fees
+  min_net_edge: 0.02
+
+fees:
+  category: crypto
+  taker_rate: 0.07
+  maker_rebate: 0.20
+  exponent: 1.0
+  assume_taker: true
+  apply_maker_rebate: false
 
 risk:
   max_position_size: 5      # ~$5 per pair at ~$1 notional
   max_daily_loss: 10        # kill switch trip
   kill_switch: true
-  max_arbs_per_day: 10      # new field — honor in long_run if present
+  max_arbs_per_day: 10
   cooldown_sec_after_arb: 30
 
 execution:
   dry_run: true             # MUST stay true in file; --live overrides
   require_both_legs: true
   prefer_maker: true
+  fill_timeout_sec: 3.0
+  fill_poll_interval_sec: 0.25
 
 agents:
   watcher: true
@@ -23,8 +34,13 @@ agents:
 poll:
   interval_sec: 1.5
   smoke_max_cycles: 0
+  use_websocket: true
 
 apis:
   gamma_host: https://gamma-api.polymarket.com
   clob_host: https://clob.polymarket.com
   ws_market: wss://ws-subscriptions-clob.polymarket.com/ws/market
+
+merge:
+  use_adapter: false
+  collateral: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"

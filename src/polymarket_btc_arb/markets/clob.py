@@ -9,34 +9,26 @@ from typing import Any, Awaitable, Callable, Optional
 
 import httpx
 
+from .ws_book import (
+    best_ask_from_price_change,
+    best_ask_from_ws_book,
+    best_bid_from_ws_book,
+    best_ask_from_levels,
+    best_bid_from_levels,
+)
+
 logger = logging.getLogger(__name__)
 
 USER_AGENT = "polymarket-btc-arb/0.1 (+research; dry-run friendly)"
 
-# Docs: bids ascending, asks descending → best ask / bid are LAST entries.
+
 def best_ask_from_book(book: dict[str, Any]) -> Optional[float]:
-    asks = book.get("asks") or []
-    if not asks:
-        return None
-    level = asks[-1]
-    price = level.get("price") if isinstance(level, dict) else level[0]
-    try:
-        p = float(price)
-    except (TypeError, ValueError):
-        return None
-    return p if p > 0 else None
+    """REST/WS book: best ask from asks levels."""
+    return best_ask_from_levels(book.get("asks") or [])
 
 
 def best_bid_from_book(book: dict[str, Any]) -> Optional[float]:
-    bids = book.get("bids") or []
-    if not bids:
-        return None
-    level = bids[-1]
-    price = level.get("price") if isinstance(level, dict) else level[0]
-    try:
-        return float(price)
-    except (TypeError, ValueError):
-        return None
+    return best_bid_from_levels(book.get("bids") or [])
 
 
 class ClobRestClient:
@@ -97,6 +89,8 @@ class ClobWsClient:
     """Market channel WS: subscribe assets_ids, PING every 10s.
 
     Endpoint: wss://ws-subscriptions-clob.polymarket.com/ws/market
+    Handles ``book`` + ``price_change`` (+ optional ``best_bid_ask``).
+    Auto-reconnects with exponential backoff.
     """
 
     def __init__(
@@ -116,6 +110,9 @@ class ClobWsClient:
 
     def get_ask(self, asset_id: str) -> Optional[float]:
         return self._best_ask.get(asset_id)
+
+    def get_bid(self, asset_id: str) -> Optional[float]:
+        return self._best_bid.get(asset_id)
 
     async def run(
         self,
@@ -197,8 +194,8 @@ class ClobWsClient:
         et = msg.get("event_type") or msg.get("type")
         if et == "book":
             aid = str(msg.get("asset_id") or msg.get("assetId") or "")
-            ask = best_ask_from_book(msg)
-            bid = best_bid_from_book(msg)
+            ask = best_ask_from_ws_book(msg)
+            bid = best_bid_from_ws_book(msg)
             if aid:
                 self._best_ask[aid] = ask
                 self._best_bid[aid] = bid
@@ -209,13 +206,10 @@ class ClobWsClient:
         elif et == "price_change":
             for pc in msg.get("price_changes") or []:
                 aid = str(pc.get("asset_id") or "")
-                ba = pc.get("best_ask")
+                ba = best_ask_from_price_change(pc)
                 bb = pc.get("best_bid")
                 if aid and ba is not None:
-                    try:
-                        self._best_ask[aid] = float(ba)
-                    except (TypeError, ValueError):
-                        pass
+                    self._best_ask[aid] = ba
                 if aid and bb is not None:
                     try:
                         self._best_bid[aid] = float(bb)

@@ -2,6 +2,15 @@ strategy:
   market: BTC_UP_DOWN
   timeframe: 15m   # 5m or 15m
   min_edge: 0.02
+  min_net_edge: 0.02   # gate on edge after fees; null → use min_edge
+
+fees:
+  category: crypto
+  taker_rate: 0.07          # docs: Crypto taker feeRate
+  maker_rebate: 0.20        # daily pool share (not applied to edge by default)
+  exponent: 1.0             # leave 1.0 to match public fee tables
+  assume_taker: true        # conservative: model taker fees on both legs
+  apply_maker_rebate: false
 
 risk:
   max_position_size: 20
@@ -12,6 +21,8 @@ execution:
   dry_run: true
   require_both_legs: true
   prefer_maker: true
+  fill_timeout_sec: 3.0
+  fill_poll_interval_sec: 0.25
   # Taker fee risk: crossing the book may incur fees that erase thin edges.
   # Prefer resting maker orders when prefer_maker is true; still verify fills.
 
@@ -23,8 +34,13 @@ agents:
 poll:
   interval_sec: 2.0
   smoke_max_cycles: 0   # 0 = run forever; CLI --smoke sets a small number
+  use_websocket: true   # WS-first; REST fallback if WS drops
 
 apis:
   gamma_host: https://gamma-api.polymarket.com
   clob_host: https://clob.polymarket.com
   ws_market: wss://ws-subscriptions-clob.polymarket.com/ws/market
+
+merge:
+  use_adapter: false
+  collateral: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
