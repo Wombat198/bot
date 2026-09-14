@@ -126,3 +126,13 @@ See `config/example.yaml`. Env: `POLYMARKET_PRIVATE_KEY`, `POLYMARKET_FUNDER`, `
 ## License
 
 MIT — see `LICENSE`.
+
+## 24/7 dry-run
+
+```bash
+bash scripts/supervise_long_run.sh
+# default CONFIG=config/live-50.yaml (still dry-run until --live --i-understand-risk)
+# logs: logs/long-run.log  pid: logs/supervise.pid
+```
+
+Auto-restarts on crash with backoff. Pair with an external keep-alive if the host can reboot.
