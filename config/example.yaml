@@ -1,0 +1,30 @@
+strategy:
+  market: BTC_UP_DOWN
+  timeframe: 15m   # 5m or 15m
+  min_edge: 0.02
+
+risk:
+  max_position_size: 20
+  max_daily_loss: 50
+  kill_switch: true
+
+execution:
+  dry_run: true
+  require_both_legs: true
+  prefer_maker: true
+  # Taker fee risk: crossing the book may incur fees that erase thin edges.
+  # Prefer resting maker orders when prefer_maker is true; still verify fills.
+
+agents:
+  watcher: true
+  executor: true
+  merger: true
+
+poll:
+  interval_sec: 2.0
+  smoke_max_cycles: 0   # 0 = run forever; CLI --smoke sets a small number
+
+apis:
+  gamma_host: https://gamma-api.polymarket.com
+  clob_host: https://clob.polymarket.com
+  ws_market: wss://ws-subscriptions-clob.polymarket.com/ws/market
