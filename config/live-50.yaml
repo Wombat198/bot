@@ -16,7 +16,7 @@ risk:
   max_position_size: 5      # ~$5 per pair at ~$1 notional
   max_daily_loss: 10        # kill switch trip
   kill_switch: true
-  max_arbs_per_day: 10
+  max_arbs_per_day: 50  # raised for 24/7 paper; was blocking after 10
   cooldown_sec_after_arb: 30
 
 execution:
